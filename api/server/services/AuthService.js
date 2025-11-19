@@ -30,6 +30,7 @@ const domains = {
 };
 
 const isProduction = process.env.NODE_ENV === 'production';
+const OIDC_SAME_SITE = process.env.OIDC_SAME_SITE || 'strict';
 const genericVerificationMessage = 'Please check your email to verify your email address.';
 
 /**
@@ -387,13 +388,13 @@ const setAuthTokens = async (userId, res, _session = null) => {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: OIDC_SAME_SITE,
     });
     res.cookie('token_provider', 'librechat', {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: OIDC_SAME_SITE,
     });
     return token;
   } catch (error) {
@@ -435,13 +436,13 @@ const setOpenIDAuthTokens = (tokenset, res, userId) => {
       expires: expirationDate,
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: OIDC_SAME_SITE,
     });
     res.cookie('token_provider', 'openid', {
       expires: expirationDate,
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: OIDC_SAME_SITE,
     });
     if (userId && isEnabled(process.env.OPENID_REUSE_TOKENS)) {
       /** JWT-signed user ID cookie for image path validation when OPENID_REUSE_TOKENS is enabled */
@@ -452,7 +453,7 @@ const setOpenIDAuthTokens = (tokenset, res, userId) => {
         expires: expirationDate,
         httpOnly: true,
         secure: isProduction,
-        sameSite: 'strict',
+        sameSite: OIDC_SAME_SITE,
       });
     }
     return tokenset.access_token;
