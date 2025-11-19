@@ -84,10 +84,15 @@ export class MCPManager extends UserConnectionManager {
     serverName: string,
   ): Promise<t.LCAvailableTools | null> {
     try {
+      // Get server config to access toolFilter
+      const serverConfig = (await registry.getServerConfig(serverName, userId)) as t.MCPOptions;
+      const toolFilter = serverConfig?.toolFilter;
+
       if (this.appConnections?.has(serverName)) {
         return MCPServerInspector.getToolFunctions(
           serverName,
           await this.appConnections.get(serverName),
+          toolFilter,
         );
       }
 
@@ -99,7 +104,11 @@ export class MCPManager extends UserConnectionManager {
         return null;
       }
 
-      return MCPServerInspector.getToolFunctions(serverName, userConnections.get(serverName)!);
+      return MCPServerInspector.getToolFunctions(
+        serverName,
+        userConnections.get(serverName)!,
+        toolFilter,
+      );
     } catch (error) {
       logger.warn(
         `[getServerToolFunctions] Error getting tool functions for server ${serverName}`,

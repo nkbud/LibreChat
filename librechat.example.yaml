@@ -176,6 +176,18 @@ actions:
 #       - -y
 #       - "@modelcontextprotocol/server-puppeteer"
 #     timeout: 300000  # 5 minutes timeout for this server
+#     # Tool filtering - control which tools are exposed from this server
+#     # Use regex patterns to include/exclude tools
+#     toolFilter:
+#       # Include only specific tools (whitelist approach)
+#       include:
+#         - "^puppeteer_navigate$"      # Exact match for navigate tool
+#         - "^puppeteer_screenshot$"    # Exact match for screenshot tool
+#         - "^puppeteer_click"          # All click-related tools
+#       # Exclude specific tools (blacklist approach)
+#       # exclude:
+#       #   - ".*delete.*"              # Exclude any tools with 'delete' in the name
+#       #   - ".*dangerous.*"           # Exclude potentially dangerous operations
 #   filesystem:
 #     # type: stdio
 #     command: npx
@@ -184,12 +196,27 @@ actions:
 #       - "@modelcontextprotocol/server-filesystem"
 #       - /home/user/LibreChat/
 #     iconPath: /home/user/LibreChat/client/public/assets/logo.svg
+#     # Example: Allow read operations but block write/delete operations
+#     toolFilter:
+#       exclude:
+#         - ".*write.*"                 # Block write operations
+#         - ".*delete.*"                # Block delete operations
+#         - ".*move.*"                  # Block move operations
 #   mcp-obsidian:
 #     command: npx
 #     args:
 #       - -y
 #       - "mcp-obsidian"
 #       - /path/to/obsidian/vault
+#     # Example: Combine include and exclude filters
+#     # Include filter is applied first, then exclude
+#     toolFilter:
+#       include:
+#         - "^search.*"                 # Only allow search-related tools
+#         - "^read.*"                   # And read-related tools
+#       exclude:
+#         - ".*admin.*"                 # But exclude any admin operations
+
 
 # Definition of custom endpoints
 endpoints:

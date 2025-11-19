@@ -334,5 +334,205 @@ describe('MCPServerInspector', () => {
 
       expect(result).toEqual({});
     });
+
+    it('should filter tools using include pattern', async () => {
+      mockConnection.client.listTools = jest.fn().mockResolvedValue({
+        tools: [
+          {
+            name: 'file_read',
+            description: 'Read a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+          {
+            name: 'file_write',
+            description: 'Write a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+          {
+            name: 'file_delete',
+            description: 'Delete a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+        ],
+      });
+
+      const toolFilter = {
+        include: ['^file_read$', '^file_write$'],
+      };
+
+      const result = await MCPServerInspector.getToolFunctions(
+        'my_server',
+        mockConnection,
+        toolFilter,
+      );
+
+      expect(result).toEqual({
+        file_read_mcp_my_server: expect.objectContaining({
+          type: 'function',
+          function: expect.objectContaining({ name: 'file_read_mcp_my_server' }),
+        }),
+        file_write_mcp_my_server: expect.objectContaining({
+          type: 'function',
+          function: expect.objectContaining({ name: 'file_write_mcp_my_server' }),
+        }),
+      });
+      expect(result['file_delete_mcp_my_server']).toBeUndefined();
+    });
+
+    it('should filter tools using exclude pattern', async () => {
+      mockConnection.client.listTools = jest.fn().mockResolvedValue({
+        tools: [
+          {
+            name: 'file_read',
+            description: 'Read a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+          {
+            name: 'file_write',
+            description: 'Write a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+          {
+            name: 'file_delete',
+            description: 'Delete a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+        ],
+      });
+
+      const toolFilter = {
+        exclude: ['.*delete.*', '.*write.*'],
+      };
+
+      const result = await MCPServerInspector.getToolFunctions(
+        'my_server',
+        mockConnection,
+        toolFilter,
+      );
+
+      expect(result).toEqual({
+        file_read_mcp_my_server: expect.objectContaining({
+          type: 'function',
+          function: expect.objectContaining({ name: 'file_read_mcp_my_server' }),
+        }),
+      });
+      expect(result['file_write_mcp_my_server']).toBeUndefined();
+      expect(result['file_delete_mcp_my_server']).toBeUndefined();
+    });
+
+    it('should apply include filter first, then exclude filter', async () => {
+      mockConnection.client.listTools = jest.fn().mockResolvedValue({
+        tools: [
+          {
+            name: 'file_read',
+            description: 'Read a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+          {
+            name: 'file_write',
+            description: 'Write a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+          {
+            name: 'file_delete',
+            description: 'Delete a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+          {
+            name: 'database_read',
+            description: 'Read from database',
+            inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+          },
+        ],
+      });
+
+      const toolFilter = {
+        include: ['^file_.*'], // Include all file operations
+        exclude: ['.*delete.*'], // But exclude delete operations
+      };
+
+      const result = await MCPServerInspector.getToolFunctions(
+        'my_server',
+        mockConnection,
+        toolFilter,
+      );
+
+      expect(result).toEqual({
+        file_read_mcp_my_server: expect.objectContaining({
+          type: 'function',
+          function: expect.objectContaining({ name: 'file_read_mcp_my_server' }),
+        }),
+        file_write_mcp_my_server: expect.objectContaining({
+          type: 'function',
+          function: expect.objectContaining({ name: 'file_write_mcp_my_server' }),
+        }),
+      });
+      // file_delete should be excluded
+      expect(result['file_delete_mcp_my_server']).toBeUndefined();
+      // database_read should not be included (doesn't match include pattern)
+      expect(result['database_read_mcp_my_server']).toBeUndefined();
+    });
+
+    it('should return all tools when no filter is specified', async () => {
+      mockConnection.client.listTools = jest.fn().mockResolvedValue({
+        tools: [
+          {
+            name: 'file_read',
+            description: 'Read a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+          {
+            name: 'file_write',
+            description: 'Write a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+        ],
+      });
+
+      const result = await MCPServerInspector.getToolFunctions('my_server', mockConnection);
+
+      expect(result).toEqual({
+        file_read_mcp_my_server: expect.objectContaining({
+          type: 'function',
+        }),
+        file_write_mcp_my_server: expect.objectContaining({
+          type: 'function',
+        }),
+      });
+    });
+
+    it('should handle regex patterns with special characters', async () => {
+      mockConnection.client.listTools = jest.fn().mockResolvedValue({
+        tools: [
+          {
+            name: 'tool.read',
+            description: 'Read tool',
+            inputSchema: { type: 'object', properties: {} },
+          },
+          {
+            name: 'tool_write',
+            description: 'Write tool',
+            inputSchema: { type: 'object', properties: {} },
+          },
+        ],
+      });
+
+      const toolFilter = {
+        include: ['^tool\\..*'], // Escape the dot to match literal '.'
+      };
+
+      const result = await MCPServerInspector.getToolFunctions(
+        'my_server',
+        mockConnection,
+        toolFilter,
+      );
+
+      expect(result).toEqual({
+        'tool.read_mcp_my_server': expect.objectContaining({
+          type: 'function',
+        }),
+      });
+      expect(result['tool_write_mcp_my_server']).toBeUndefined();
+    });
   });
 });
