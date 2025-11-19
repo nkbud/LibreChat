@@ -400,13 +400,13 @@ const setAuthTokens = async (userId, res, _session = null) => {
       expires: new Date(refreshTokenExpires).toISOString(),
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: OIDC_SAME_SITE,
     });
     res.cookie('refreshToken', refreshToken, {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: OIDC_SAME_SITE,
     });
 
     // Debug logging for OIDC_SAME_SITE troubleshooting (safe: partial token preview only)
@@ -417,14 +417,14 @@ const setAuthTokens = async (userId, res, _session = null) => {
       expires: new Date(refreshTokenExpires).toISOString(),
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: OIDC_SAME_SITE,
       token_provider: 'librechat',
     });
     res.cookie('token_provider', 'librechat', {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: OIDC_SAME_SITE,
     });
     return token;
   } catch (error) {
