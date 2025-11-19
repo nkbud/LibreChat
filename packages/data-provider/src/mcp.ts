@@ -73,6 +73,21 @@ const BaseOptionsSchema = z.object({
       }),
     )
     .optional(),
+  /**
+   * Regex-based tool filtering configuration for controlling which tools are exposed
+   * - include: Array of regex patterns - only tools matching these patterns will be exposed
+   * - exclude: Array of regex patterns - tools matching these patterns will be blocked
+   * - If both are specified: include is applied first, then exclude
+   * - If neither is specified: all tools are exposed
+   */
+  toolFilter: z
+    .object({
+      /** Regex patterns for tools to include (whitelist) */
+      include: z.array(z.string()).optional(),
+      /** Regex patterns for tools to exclude (blacklist) */
+      exclude: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 export const StdioOptionsSchema = BaseOptionsSchema.extend({

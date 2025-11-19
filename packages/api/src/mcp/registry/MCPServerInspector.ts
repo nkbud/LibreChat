@@ -1,4 +1,5 @@
 import { Constants } from 'librechat-data-provider';
+import { logger } from '@librechat/data-schemas';
 import type { JsonSchemaType } from '@librechat/data-schemas';
 import type { MCPConnection } from '~/mcp/connection';
 import type * as t from '~/mcp/types';
@@ -90,23 +91,103 @@ export class MCPServerInspector {
     this.config.toolFunctions = await MCPServerInspector.getToolFunctions(
       this.serverName,
       this.connection!,
+      this.config.toolFilter,
     );
+  }
+
+  /**
+   * Filters tool names based on include/exclude regex patterns
+   * @param toolNames - Array of tool names to filter
+   * @param toolFilter - Filter configuration with include/exclude patterns
+   * @param serverName - Server name for logging
+   * @returns Filtered array of tool names
+   */
+  private static filterTools(
+    toolNames: string[],
+    toolFilter: { include?: string[]; exclude?: string[] } | undefined,
+    serverName: string,
+  ): string[] {
+    if (!toolFilter) {
+      return toolNames;
+    }
+
+    let filteredTools = [...toolNames];
+    const logPrefix = `[MCP][${serverName}][ToolFilter]`;
+
+    // Apply include filter first (whitelist)
+    if (toolFilter.include && toolFilter.include.length > 0) {
+      try {
+        const includePatterns = toolFilter.include.map((pattern) => new RegExp(pattern));
+        const beforeCount = filteredTools.length;
+        filteredTools = filteredTools.filter((toolName) =>
+          includePatterns.some((pattern) => pattern.test(toolName)),
+        );
+        const blocked = toolNames.filter((name) => !filteredTools.includes(name));
+        if (blocked.length > 0) {
+          logger.info(
+            `${logPrefix} Include filter blocked ${blocked.length} tool(s): ${blocked.join(', ')}`,
+          );
+        }
+        logger.info(
+          `${logPrefix} Include filter: ${beforeCount} tools -> ${filteredTools.length} tools`,
+        );
+      } catch (error) {
+        logger.error(`${logPrefix} Invalid include regex pattern:`, error);
+      }
+    }
+
+    // Apply exclude filter (blacklist)
+    if (toolFilter.exclude && toolFilter.exclude.length > 0) {
+      try {
+        const excludePatterns = toolFilter.exclude.map((pattern) => new RegExp(pattern));
+        const beforeCount = filteredTools.length;
+        const excluded = filteredTools.filter((toolName) =>
+          excludePatterns.some((pattern) => pattern.test(toolName)),
+        );
+        filteredTools = filteredTools.filter(
+          (toolName) => !excludePatterns.some((pattern) => pattern.test(toolName)),
+        );
+        if (excluded.length > 0) {
+          logger.info(
+            `${logPrefix} Exclude filter blocked ${excluded.length} tool(s): ${excluded.join(', ')}`,
+          );
+        }
+        logger.info(
+          `${logPrefix} Exclude filter: ${beforeCount} tools -> ${filteredTools.length} tools`,
+        );
+      } catch (error) {
+        logger.error(`${logPrefix} Invalid exclude regex pattern:`, error);
+      }
+    }
+
+    return filteredTools;
   }
 
   /**
    * Converts server tools to LibreChat-compatible tool functions format.
    * @param serverName - The name of the server
    * @param connection - The MCP connection
+   * @param toolFilter - Optional filter configuration for controlling which tools are exposed
    * @returns Tool functions formatted for LibreChat
    */
   public static async getToolFunctions(
     serverName: string,
     connection: MCPConnection,
+    toolFilter?: { include?: string[]; exclude?: string[] },
   ): Promise<t.LCAvailableTools> {
     const { tools }: t.MCPToolListResponse = await connection.client.listTools();
 
+    // Filter tools based on toolFilter configuration
+    const toolNames = tools.map((tool) => tool.name);
+    const filteredToolNames = MCPServerInspector.filterTools(toolNames, toolFilter, serverName);
+
     const toolFunctions: t.LCAvailableTools = {};
     tools.forEach((tool) => {
+      // Only include tools that passed the filter
+      if (!filteredToolNames.includes(tool.name)) {
+        return;
+      }
+
       const name = `${tool.name}${Constants.mcp_delimiter}${serverName}`;
       toolFunctions[name] = {
         type: 'function',
