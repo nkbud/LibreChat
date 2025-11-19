@@ -61,8 +61,8 @@ describe('AuthService Cookie SameSite Configuration', () => {
   });
 
   describe('setAuthTokens', () => {
-    it('should use strict sameSite by default when OIDC_SAME_SITE is not set', async () => {
-      // Delete the env variable to test default
+    it('should always use strict sameSite (not affected by OIDC_SAME_SITE)', async () => {
+      // setAuthTokens is for local auth and should always use 'strict'
       delete process.env.OIDC_SAME_SITE;
       process.env.NODE_ENV = 'production';
 
@@ -97,7 +97,8 @@ describe('AuthService Cookie SameSite Configuration', () => {
       );
     });
 
-    it('should use none sameSite when OIDC_SAME_SITE is set to none', async () => {
+    it('should always use strict sameSite even when OIDC_SAME_SITE is set to none', async () => {
+      // setAuthTokens should ignore OIDC_SAME_SITE as it's for local auth
       process.env.OIDC_SAME_SITE = 'none';
       process.env.NODE_ENV = 'production';
 
@@ -109,49 +110,25 @@ describe('AuthService Cookie SameSite Configuration', () => {
 
       expect(mockRes.cookie).toHaveBeenCalledTimes(2);
       
-      // Check refreshToken cookie
+      // Check refreshToken cookie - should still be 'strict'
       expect(mockRes.cookie).toHaveBeenCalledWith(
         'refreshToken',
         expect.any(String),
         expect.objectContaining({
           httpOnly: true,
           secure: true,
-          sameSite: 'none',
+          sameSite: 'strict',
         })
       );
 
-      // Check token_provider cookie
+      // Check token_provider cookie - should still be 'strict'
       expect(mockRes.cookie).toHaveBeenCalledWith(
         'token_provider',
         'librechat',
         expect.objectContaining({
           httpOnly: true,
           secure: true,
-          sameSite: 'none',
-        })
-      );
-    });
-
-    it('should use lax sameSite when OIDC_SAME_SITE is set to lax', async () => {
-      process.env.OIDC_SAME_SITE = 'lax';
-      process.env.NODE_ENV = 'production';
-
-      // Re-import to get fresh module with current env
-      jest.resetModules();
-      const { setAuthTokens } = require('~/server/services/AuthService');
-
-      await setAuthTokens('user123', mockRes);
-
-      expect(mockRes.cookie).toHaveBeenCalledTimes(2);
-      
-      // Check refreshToken cookie
-      expect(mockRes.cookie).toHaveBeenCalledWith(
-        'refreshToken',
-        expect.any(String),
-        expect.objectContaining({
-          httpOnly: true,
-          secure: true,
-          sameSite: 'lax',
+          sameSite: 'strict',
         })
       );
     });
