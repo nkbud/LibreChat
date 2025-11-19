@@ -28,12 +28,28 @@ router.use(loginLimiter);
 
 const oauthHandler = async (req, res, next) => {
   try {
+    logger.debug('[oauthHandler] Starting OAuth callback handler', {
+      event: 'oauth_handler_start',
+      hasUser: !!req.user,
+      userProvider: req.user?.provider,
+      userId: req.user?._id,
+      headersSent: res.headersSent,
+    });
+
     if (res.headersSent) {
+      logger.warn('[oauthHandler] Headers already sent, aborting', {
+        event: 'oauth_handler_headers_sent',
+      });
       return;
     }
 
     await checkBan(req, res);
     if (req.banned) {
+      logger.warn('[oauthHandler] User is banned', {
+        event: 'oauth_handler_user_banned',
+        userId: req.user?._id,
+        email: req.user?.email,
+      });
       return;
     }
     if (
@@ -41,14 +57,44 @@ const oauthHandler = async (req, res, next) => {
       req.user.provider == 'openid' &&
       isEnabled(process.env.OPENID_REUSE_TOKENS) === true
     ) {
+      logger.debug('[oauthHandler] Using OpenID token reuse flow', {
+        event: 'oauth_handler_openid_reuse',
+        userId: req.user._id,
+        hasTokenset: !!req.user.tokenset,
+        hasAccessToken: !!req.user.tokenset?.access_token,
+        hasRefreshToken: !!req.user.tokenset?.refresh_token,
+      });
+
       await syncUserEntraGroupMemberships(req.user, req.user.tokenset.access_token);
       setOpenIDAuthTokens(req.user.tokenset, res, req.user._id.toString());
+
+      logger.debug('[oauthHandler] OpenID tokens set, redirecting to client', {
+        event: 'oauth_handler_openid_redirect',
+        redirectUrl: domains.client,
+      });
     } else {
+      logger.debug('[oauthHandler] Using standard auth token flow', {
+        event: 'oauth_handler_standard_auth',
+        userId: req.user._id,
+        provider: req.user?.provider,
+      });
+
       await setAuthTokens(req.user._id, res);
+
+      logger.debug('[oauthHandler] Standard tokens set, redirecting to client', {
+        event: 'oauth_handler_standard_redirect',
+        redirectUrl: domains.client,
+      });
     }
     res.redirect(domains.client);
   } catch (err) {
-    logger.error('Error in setting authentication tokens:', err);
+    logger.error('Error in setting authentication tokens:', {
+      event: 'oauth_handler_error',
+      error: err.message,
+      stack: err.stack,
+      errorType: err.constructor.name,
+      userId: req.user?._id,
+    });
     next(err);
   }
 };
@@ -57,7 +103,11 @@ router.get('/error', (req, res) => {
   /** A single error message is pushed by passport when authentication fails. */
   const errorMessage = req.session?.messages?.pop() || 'Unknown error';
   logger.error('Error in OAuth authentication:', {
+    event: 'oauth_error',
     message: errorMessage,
+    sessionId: req.session?.id,
+    hasSession: !!req.session,
+    sessionMessages: req.session?.messages,
   });
 
   res.redirect(`${domains.client}/login?redirect=false&error=${ErrorTypes.AUTH_FAILED}`);
@@ -117,6 +167,12 @@ router.get(
  * OpenID Routes
  */
 router.get('/openid', (req, res, next) => {
+  logger.debug('[OpenID] Starting OpenID authentication request', {
+    event: 'openid_auth_start',
+    sessionId: req.session?.id,
+    hasSession: !!req.session,
+  });
+
   return passport.authenticate('openid', {
     session: false,
     state: randomState(),
@@ -132,7 +188,14 @@ router.get(
   }),
   setBalanceConfig,
   checkDomainAllowed,
-  oauthHandler,
+  (req, res, next) => {
+    logger.debug('[OpenID] Callback received, processing', {
+      event: 'openid_callback_received',
+      hasUser: !!req.user,
+      userId: req.user?._id,
+    });
+    oauthHandler(req, res, next);
+  },
 );
 
 /**
