@@ -33,6 +33,10 @@ jest.mock('jsonwebtoken', () => ({
   sign: jest.fn(() => 'signed-jwt-token'),
 }));
 
+jest.mock('~/server/services/Config', () => ({
+  getAppConfig: jest.fn().mockResolvedValue({}),
+}));
+
 describe('AuthService Cookie SameSite Configuration', () => {
   let originalEnv;
   let mockRes;
@@ -59,8 +63,8 @@ describe('AuthService Cookie SameSite Configuration', () => {
   });
 
   describe('setAuthTokens', () => {
-    it('should always use strict sameSite (not affected by OIDC_SAME_SITE)', async () => {
-      // setAuthTokens is for local auth and should always use 'strict'
+    it('should use strict sameSite by default when OIDC_SAME_SITE is not set', async () => {
+      // setAuthTokens should use strict by default
       delete process.env.OIDC_SAME_SITE;
       process.env.NODE_ENV = 'production';
 
@@ -95,8 +99,8 @@ describe('AuthService Cookie SameSite Configuration', () => {
       );
     });
 
-    it('should always use strict sameSite even when OIDC_SAME_SITE is set to none', async () => {
-      // setAuthTokens should ignore OIDC_SAME_SITE as it's for local auth
+    it('should use none sameSite when OIDC_SAME_SITE is set to none', async () => {
+      // setAuthTokens should respect OIDC_SAME_SITE env var
       process.env.OIDC_SAME_SITE = 'none';
       process.env.NODE_ENV = 'production';
 
@@ -108,25 +112,25 @@ describe('AuthService Cookie SameSite Configuration', () => {
 
       expect(mockRes.cookie).toHaveBeenCalledTimes(2);
 
-      // Check refreshToken cookie - should still be 'strict'
+      // Check refreshToken cookie - should use 'none'
       expect(mockRes.cookie).toHaveBeenCalledWith(
         'refreshToken',
         expect.any(String),
         expect.objectContaining({
           httpOnly: true,
           secure: true,
-          sameSite: 'strict',
+          sameSite: 'none',
         }),
       );
 
-      // Check token_provider cookie - should still be 'strict'
+      // Check token_provider cookie - should use 'none'
       expect(mockRes.cookie).toHaveBeenCalledWith(
         'token_provider',
         'librechat',
         expect.objectContaining({
           httpOnly: true,
           secure: true,
-          sameSite: 'strict',
+          sameSite: 'none',
         }),
       );
     });
@@ -294,7 +298,7 @@ describe('AuthService Cookie SameSite Configuration', () => {
           expires: expect.any(String),
           httpOnly: true,
           secure: true,
-          sameSite: 'strict',
+          sameSite: 'strict', // Default value when OIDC_SAME_SITE is not set
         }),
       );
 
@@ -304,11 +308,11 @@ describe('AuthService Cookie SameSite Configuration', () => {
         expect.objectContaining({
           event: 'setting_refresh_cookie',
           cookieName: 'token_provider',
-          tokenPreview: 'librechat',
+          tokenPreview: 'librecha...', // First 8 chars of 'librechat' + '...'
           expires: expect.any(String),
           httpOnly: true,
           secure: true,
-          sameSite: 'strict',
+          sameSite: 'strict', // Default value when OIDC_SAME_SITE is not set
           token_provider: 'librechat',
         }),
       );
@@ -353,7 +357,7 @@ describe('AuthService Cookie SameSite Configuration', () => {
         expect.objectContaining({
           event: 'setting_refresh_cookie',
           cookieName: 'token_provider',
-          tokenPreview: 'openid',
+          tokenPreview: 'openid...', // First 8 chars (6 in this case) of 'openid' + '...'
           expires: expect.any(String),
           httpOnly: true,
           secure: true,
