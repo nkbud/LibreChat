@@ -2,13 +2,19 @@
 
 Thank you to all the contributors who have helped make this project possible! We welcome various types of contributions, such as bug reports, documentation improvements, feature requests, and code contributions.
 
+## About This Fork
+
+This is a fork of [DannyAvila/LibreChat](https://github.com/danny-avila/LibreChat) maintained by nkbud. This fork has its own release process and deployment infrastructure. For information about creating releases and publishing container images for this fork, see [RELEASE.md](RELEASE.md).
+
 ## Contributing Guidelines
 
-If the feature you would like to contribute has not already received prior approval from the project maintainers (i.e., the feature is currently on the [roadmap](https://github.com/users/danny-avila/projects/2)), please submit a request in the [Feature Requests & Suggestions category](https://github.com/danny-avila/LibreChat/discussions/new?category=feature-requests-suggestions) of the discussions board before beginning work on it. The requests should include specific implementation details, including areas of the application that will be affected by the change (including designs if applicable), and any other relevant information that might be required for a speedy review. However, proposals are not required for small changes, bug fixes, or documentation improvements. Small changes and bug fixes should be tied to an [issue](https://github.com/danny-avila/LibreChat/issues) and included in the corresponding pull request for tracking purposes.
+For feature contributions to this fork, please [open an issue](https://github.com/nkbud/LibreChat/issues) to discuss the proposed changes before starting work. However, proposals are not required for small changes, bug fixes, or documentation improvements. Small changes and bug fixes should be tied to an [issue](https://github.com/nkbud/LibreChat/issues) and included in the corresponding pull request for tracking purposes.
+
+**Note:** If you'd like to contribute to the upstream LibreChat project, please visit the [upstream repository](https://github.com/danny-avila/LibreChat) and follow their [contributing guidelines](https://github.com/danny-avila/LibreChat/blob/main/.github/CONTRIBUTING.md).
 
 Please note that a pull request involving a feature that has not been reviewed and approved by the project maintainers may be rejected. We appreciate your understanding and cooperation.
 
-If you would like to discuss the changes you wish to make, join our [Discord community](https://discord.librechat.ai), where you can engage with other contributors and seek guidance from the community.
+If you would like to discuss the changes you wish to make, you can [open a discussion](https://github.com/nkbud/LibreChat/discussions) in this repository.
 
 ## Our Standards
 
