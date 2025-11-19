@@ -51,25 +51,68 @@ const previewToken = (token) => (token ? `${token.slice(0, 8)}...` : null);
 const logoutUser = async (req, refreshToken) => {
   try {
     const userId = req.user._id;
+
+    logger.debug('[logoutUser] Starting logout process', {
+      event: 'logout_start',
+      userId: userId,
+      hasRefreshToken: !!refreshToken,
+    });
+
     const session = await findSession({ userId: userId, refreshToken });
+
+    logger.debug('[logoutUser] Session lookup for logout', {
+      event: 'logout_session_lookup',
+      userId: userId,
+      sessionFound: !!session,
+      sessionId: session?._id,
+    });
 
     if (session) {
       try {
         await deleteSession({ sessionId: session._id });
+        logger.info('[logoutUser] Session deleted successfully', {
+          event: 'logout_session_deleted',
+          userId: userId,
+          sessionId: session._id,
+        });
       } catch (deleteErr) {
-        logger.error('[logoutUser] Failed to delete session.', deleteErr);
+        logger.error('[logoutUser] Failed to delete session.', {
+          event: 'logout_session_delete_failed',
+          error: deleteErr.message,
+          stack: deleteErr.stack,
+          userId: userId,
+          sessionId: session._id,
+        });
         return { status: 500, message: 'Failed to delete session.' };
       }
     }
 
     try {
       req.session.destroy();
+      logger.debug('[logoutUser] Express session destroyed', {
+        event: 'logout_express_session_destroyed',
+        userId: userId,
+      });
     } catch (destroyErr) {
-      logger.debug('[logoutUser] Failed to destroy session.', destroyErr);
+      logger.debug('[logoutUser] Failed to destroy session.', {
+        event: 'logout_express_session_destroy_failed',
+        error: destroyErr.message,
+        userId: userId,
+      });
     }
+
+    logger.info('[logoutUser] Logout successful', {
+      event: 'logout_complete',
+      userId: userId,
+    });
 
     return { status: 200, message: 'Logout successful' };
   } catch (err) {
+    logger.error('[logoutUser] Logout error', {
+      event: 'logout_error',
+      error: err.message,
+      stack: err.stack,
+    });
     return { status: 500, message: err.message };
   }
 };
@@ -375,22 +418,56 @@ const resetPassword = async (userId, token, password) => {
  */
 const setAuthTokens = async (userId, res, _session = null) => {
   try {
+    logger.debug('[setAuthTokens] Starting token generation', {
+      event: 'set_auth_tokens_start',
+      userId: userId,
+      hasSession: !!_session,
+      sessionId: _session?._id,
+    });
+
     let session = _session;
     let refreshToken;
     let refreshTokenExpires;
 
     if (session && session._id && session.expiration != null) {
+      logger.debug('[setAuthTokens] Using existing session', {
+        event: 'set_auth_tokens_existing_session',
+        sessionId: session._id,
+        expiration: session.expiration,
+      });
+
       refreshTokenExpires = session.expiration.getTime();
       refreshToken = await generateRefreshToken(session);
+
+      logger.debug('[setAuthTokens] Generated refresh token from session', {
+        event: 'refresh_token_generated_from_session',
+        sessionId: session._id,
+      });
     } else {
+      logger.debug('[setAuthTokens] Creating new session', {
+        event: 'set_auth_tokens_new_session',
+        userId: userId,
+      });
+
       const result = await createSession(userId);
       session = result.session;
       refreshToken = result.refreshToken;
       refreshTokenExpires = session.expiration.getTime();
+
+      logger.debug('[setAuthTokens] New session created', {
+        event: 'session_created',
+        sessionId: session._id,
+        expiration: session.expiration,
+      });
     }
 
     const user = await getUserById(userId);
     const token = await generateToken(user);
+
+    logger.debug('[setAuthTokens] Generated access token', {
+      event: 'access_token_generated',
+      userId: userId,
+    });
 
     // Debug logging for OIDC_SAME_SITE troubleshooting (safe: partial token preview only)
     logger.debug('[setAuthTokens] Setting refresh token cookie', {
@@ -426,9 +503,22 @@ const setAuthTokens = async (userId, res, _session = null) => {
       secure: isProduction,
       sameSite: OIDC_SAME_SITE,
     });
+
+    logger.info('[setAuthTokens] Tokens set successfully', {
+      event: 'set_auth_tokens_complete',
+      userId: userId,
+      sessionId: session._id,
+    });
+
     return token;
   } catch (error) {
-    logger.error('[setAuthTokens] Error in setting authentication tokens:', error);
+    logger.error('[setAuthTokens] Error in setting authentication tokens:', {
+      event: 'set_auth_tokens_error',
+      error: error.message,
+      stack: error.stack,
+      errorType: error.constructor.name,
+      userId: userId,
+    });
     throw error;
   }
 };
@@ -445,8 +535,16 @@ const setAuthTokens = async (userId, res, _session = null) => {
  */
 const setOpenIDAuthTokens = (tokenset, res, userId) => {
   try {
+    logger.debug('[setOpenIDAuthTokens] Starting OpenID token setting', {
+      event: 'set_openid_tokens_start',
+      hasTokenset: !!tokenset,
+      userId: userId,
+    });
+
     if (!tokenset) {
-      logger.error('[setOpenIDAuthTokens] No tokenset found in request');
+      logger.error('[setOpenIDAuthTokens] No tokenset found in request', {
+        event: 'set_openid_tokens_no_tokenset',
+      });
       return;
     }
     const { REFRESH_TOKEN_EXPIRY } = process.env ?? {};
@@ -454,12 +552,25 @@ const setOpenIDAuthTokens = (tokenset, res, userId) => {
       ? eval(REFRESH_TOKEN_EXPIRY)
       : 1000 * 60 * 60 * 24 * 7; // 7 days default
     const expirationDate = new Date(Date.now() + expiryInMilliseconds);
+
+    logger.debug('[setOpenIDAuthTokens] Token expiry calculated', {
+      event: 'token_expiry_calculated',
+      expiryInMilliseconds: expiryInMilliseconds,
+      expirationDate: expirationDate.toISOString(),
+    });
+
     if (tokenset == null) {
-      logger.error('[setOpenIDAuthTokens] No tokenset found in request');
+      logger.error('[setOpenIDAuthTokens] No tokenset found in request', {
+        event: 'set_openid_tokens_tokenset_null',
+      });
       return;
     }
     if (!tokenset.access_token || !tokenset.refresh_token) {
-      logger.error('[setOpenIDAuthTokens] No access or refresh token found in tokenset');
+      logger.error('[setOpenIDAuthTokens] No access or refresh token found in tokenset', {
+        event: 'set_openid_tokens_missing_tokens',
+        hasAccessToken: !!tokenset.access_token,
+        hasRefreshToken: !!tokenset.refresh_token,
+      });
       return;
     }
 
@@ -503,6 +614,11 @@ const setOpenIDAuthTokens = (tokenset, res, userId) => {
         expiresIn: expiryInMilliseconds / 1000,
       });
 
+      logger.debug('[setOpenIDAuthTokens] Signed user ID for image path validation', {
+        event: 'signed_user_id_created',
+        userId: userId,
+      });
+
       // Debug logging for OIDC_SAME_SITE troubleshooting (safe: partial token preview only)
       logger.debug('[setOpenIDAuthTokens] Setting openid_user_id cookie', {
         event: 'setting_refresh_cookie',
@@ -520,9 +636,21 @@ const setOpenIDAuthTokens = (tokenset, res, userId) => {
         sameSite: OIDC_SAME_SITE,
       });
     }
+
+    logger.info('[setOpenIDAuthTokens] OpenID tokens set successfully', {
+      event: 'set_openid_tokens_complete',
+      userId: userId,
+    });
+
     return tokenset.access_token;
   } catch (error) {
-    logger.error('[setOpenIDAuthTokens] Error in setting authentication tokens:', error);
+    logger.error('[setOpenIDAuthTokens] Error in setting authentication tokens:', {
+      event: 'set_openid_tokens_error',
+      error: error.message,
+      stack: error.stack,
+      errorType: error.constructor.name,
+      userId: userId,
+    });
     throw error;
   }
 };

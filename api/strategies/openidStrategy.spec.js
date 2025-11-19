@@ -508,6 +508,9 @@ describe('setupOpenId', () => {
     );
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining('demoted from admin - role no longer present in token'),
+      expect.objectContaining({
+        event: 'admin_role_revoked',
+      }),
     );
   });
 
@@ -621,6 +624,9 @@ describe('setupOpenId', () => {
         expect.stringContaining(
           "Key 'resource_access.nonexistent.roles' not found or invalid type in id token!",
         ),
+        expect.objectContaining({
+          event: 'role_check_failed_invalid_type',
+        }),
       );
       expect(user).toBe(false);
       expect(details.message).toContain('role to log in');
@@ -644,6 +650,9 @@ describe('setupOpenId', () => {
 
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining("Key 'org.team.roles' not found or invalid type in id token!"),
+        expect.objectContaining({
+          event: 'role_check_failed_invalid_type',
+        }),
       );
       expect(user).toBe(false);
     });
@@ -828,6 +837,9 @@ describe('setupOpenId', () => {
 
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining("Key 'access.roles' not found or invalid type in id token!"),
+        expect.objectContaining({
+          event: 'role_check_failed_invalid_type',
+        }),
       );
       expect(user).toBe(false);
     });
@@ -848,6 +860,9 @@ describe('setupOpenId', () => {
 
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining("Key 'data.roles' not found or invalid type in id token!"),
+        expect.objectContaining({
+          event: 'role_check_failed_invalid_type',
+        }),
       );
       expect(user).toBe(false);
     });
@@ -872,6 +887,9 @@ describe('setupOpenId', () => {
         expect.stringContaining(
           "Invalid admin role token kind: invalid. Must be one of 'access', 'id', or 'userinfo'",
         ),
+        expect.objectContaining({
+          event: 'admin_role_invalid_token_kind',
+        }),
       );
     });
 
@@ -891,6 +909,9 @@ describe('setupOpenId', () => {
 
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining("Key 'roles' not found or invalid type in id token!"),
+        expect.objectContaining({
+          event: 'role_check_failed_invalid_type',
+        }),
       );
       expect(user).toBe(false);
       expect(details.message).toContain('role to log in');
@@ -912,6 +933,9 @@ describe('setupOpenId', () => {
 
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining("Key 'roleCount' not found or invalid type in id token!"),
+        expect.objectContaining({
+          event: 'role_check_failed_invalid_type',
+        }),
       );
       expect(user).toBe(false);
     });
