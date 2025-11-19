@@ -4,11 +4,41 @@ This document describes the release and deployment process for the nkbud/LibreCh
 
 ## Overview
 
-This fork maintains its own release and deployment infrastructure, separate from the upstream DannyAvila/LibreChat repository. All releases, tags, and container images are published under the nkbud namespace.
+This fork maintains a simplified CI/CD infrastructure focused on essential workflows:
+- Backend unit tests
+- Frontend unit tests  
+- Docker image builds to GitHub Container Registry (GHCR)
 
-## Release Workflows
+All container images are published to the `ghcr.io/nkbud/` namespace.
 
-### 1. Tag-based Image Builds (`tag-images.yml`)
+## Active Workflows
+
+### 1. Backend Unit Tests (`backend-review.yml`)
+
+**Trigger:** Pull requests to `main`, `dev`, or `release/*` branches that modify `api/**` or `packages/**`
+
+**Purpose:** Runs backend unit tests to ensure code quality
+
+**What it does:**
+- Runs unit tests for API
+- Runs unit tests for librechat-data-provider package
+- Runs unit tests for @librechat/data-schemas package
+- Runs unit tests for @librechat/api package
+- Checks for circular dependencies
+
+### 2. Frontend Unit Tests (`frontend-review.yml`)
+
+**Trigger:** Pull requests to `main`, `dev`, or `release/*` branches that modify `client/**` or `packages/data-provider/**`
+
+**Purpose:** Runs frontend unit tests on both Ubuntu and Windows
+
+**What it does:**
+- Builds the client
+- Runs client unit tests on Ubuntu
+- Runs client unit tests on Windows
+- Ensures cross-platform compatibility
+
+### 3. Docker Image Builds (`tag-images.yml`)
 
 **Trigger:** When a new tag is pushed to the repository
 
@@ -17,7 +47,6 @@ This fork maintains its own release and deployment infrastructure, separate from
 **What it does:**
 - Builds both `librechat` and `librechat-api` images
 - Publishes to GitHub Container Registry (GHCR) at `ghcr.io/nkbud/`
-- Publishes to Docker Hub (if credentials are configured)
 - Creates multi-platform images (linux/amd64, linux/arm64)
 - Tags images with both the version tag and `latest`
 
@@ -34,44 +63,7 @@ This will automatically build and publish:
 - `ghcr.io/nkbud/librechat-api:v1.0.0`
 - `ghcr.io/nkbud/librechat-api:latest`
 
-### 2. Main Branch Image Builds (`main-image-workflow.yml`)
-
-**Trigger:** Manual dispatch via GitHub Actions UI
-
-**Purpose:** Rebuild images based on the latest tag
-
-**What it does:**
-- Fetches the latest git tag
-- Builds and publishes images with that tag
-- Updates the `latest` tag
-- Useful for rebuilding without creating a new tag
-
-### 3. Development Branch Images (`dev-images.yml`)
-
-**Trigger:** Pushes to `main` branch (automatically), or manual dispatch
-
-**Purpose:** Creates development/preview images for testing
-
-**What it does:**
-- Builds `librechat-dev` and `librechat-dev-api` images
-- Tags with commit SHA and `latest`
-- Published to `ghcr.io/nkbud/`
-
-**Example images:**
-- `ghcr.io/nkbud/librechat-dev:abc123` (where abc123 is the commit SHA)
-- `ghcr.io/nkbud/librechat-dev:latest`
-
-### 4. Dev Branch Images (`dev-branch-images.yml`)
-
-**Trigger:** Pushes to `dev` branch
-
-**Purpose:** Creates images for the dev branch specifically
-
-**What it does:**
-- Similar to dev-images.yml but for the `dev` branch
-- Builds `lc-dev` and `lc-dev-api` images
-
-## Container Registries
+## Container Registry
 
 ### GitHub Container Registry (GHCR)
 
@@ -83,16 +75,6 @@ All images are automatically published to GHCR under the `nkbud` namespace:
 **Available images:**
 - `ghcr.io/nkbud/librechat` - Production image (Dockerfile)
 - `ghcr.io/nkbud/librechat-api` - API-only image (Dockerfile.multi)
-- `ghcr.io/nkbud/librechat-dev` - Development image from main branch
-- `ghcr.io/nkbud/librechat-dev-api` - Development API image from main branch
-- `ghcr.io/nkbud/lc-dev` - Development image from dev branch
-- `ghcr.io/nkbud/lc-dev-api` - Development API image from dev branch
-
-### Docker Hub (Optional)
-
-If Docker Hub credentials are configured as repository secrets, images will also be published to Docker Hub:
-- Required secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
-- Published to: `$DOCKERHUB_USERNAME/librechat`, etc.
 
 ## Creating a New Release
 
@@ -197,11 +179,6 @@ If a release has issues:
    git push origin :refs/tags/v1.2.3
    ```
 
-3. **Rebuild previous version** as latest:
-   - Go to Actions > "Docker Compose Build Latest Main Image Tag"
-   - Click "Run workflow"
-   - This will rebuild the latest git tag and publish as `latest`
-
 ## Troubleshooting
 
 ### Workflow Not Triggering
@@ -233,30 +210,28 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
 ## Repository Secrets Required
 
-For full functionality, configure these secrets in repository settings:
-
 ### Required for GHCR Publishing
 - `GITHUB_TOKEN` - Automatically provided by GitHub Actions
 
-### Optional for Docker Hub Publishing
-- `DOCKERHUB_USERNAME` - Your Docker Hub username
-- `DOCKERHUB_TOKEN` - Docker Hub access token
-
-### Optional for Other Features
-- `AXE_LINTER_API_KEY` - For accessibility linting
-- `LOCIZE_API_KEY`, `LOCIZE_PROJECT_ID` - For translation management
-- `AZURE_CREDENTIALS` - For Azure deployments
-- `DO_SSH_PRIVATE_KEY`, `DO_KNOWN_HOSTS`, `DO_HOST`, `DO_USER` - For DigitalOcean deployments
+### Required for Unit Tests
+- `MONGO_URI` - MongoDB connection string for backend tests
+- `OPENAI_API_KEY` - OpenAI API key for backend tests
+- `JWT_SECRET` - JWT secret for backend tests
+- `CREDS_KEY` - Credentials encryption key
+- `CREDS_IV` - Credentials encryption IV
+- `BAN_VIOLATIONS` - Ban violations setting
+- `BAN_DURATION` - Ban duration setting
+- `BAN_INTERVAL` - Ban interval setting
 
 ## Differences from Upstream
 
-This fork's release process differs from DannyAvila/LibreChat in the following ways:
+This fork's workflow setup differs from DannyAvila/LibreChat:
 
-1. **All workflows reference `nkbud/LibreChat`** instead of `danny-avila/LibreChat`
-2. **Container images are published to `ghcr.io/nkbud/`** instead of `ghcr.io/danny-avila/`
-3. **Pull request reviewers default to `nkbud`** instead of `danny-avila`
-4. **Independent release versioning** - This fork maintains its own version numbering
-5. **Deployment workflows** are configured for nkbud's infrastructure
+1. **Simplified workflows** - Only essential CI/CD workflows are enabled
+2. **GHCR only** - Container images published only to `ghcr.io/nkbud/`, not Docker Hub
+3. **No dev/staging workflows** - Removed dev branch image builds and deployment workflows
+4. **No publishing workflows** - Removed NPM package publishing workflows
+5. **No additional checks** - Removed ESLint CI, accessibility linting, i18n checks, etc.
 
 ## Keeping Up with Upstream
 
