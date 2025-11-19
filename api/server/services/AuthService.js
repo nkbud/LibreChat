@@ -34,6 +34,14 @@ const OIDC_SAME_SITE = process.env.OIDC_SAME_SITE || 'strict';
 const genericVerificationMessage = 'Please check your email to verify your email address.';
 
 /**
+ * Creates a safe preview of a token for logging (first 8 characters only)
+ * Used for debugging OIDC_SAME_SITE troubleshooting without exposing full tokens
+ * @param {string} token - The token to preview
+ * @returns {string|null} - Preview string or null if no token
+ */
+const previewToken = (token) => (token ? `${token.slice(0, 8)}...` : null);
+
+/**
  * Logout user
  *
  * @param {ServerRequest} req
@@ -384,11 +392,33 @@ const setAuthTokens = async (userId, res, _session = null) => {
     const user = await getUserById(userId);
     const token = await generateToken(user);
 
+    // Debug logging for OIDC_SAME_SITE troubleshooting (safe: partial token preview only)
+    logger.debug('[setAuthTokens] Setting refresh token cookie', {
+      event: 'setting_refresh_cookie',
+      cookieName: 'refreshToken',
+      tokenPreview: previewToken(refreshToken),
+      expires: new Date(refreshTokenExpires).toISOString(),
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+    });
     res.cookie('refreshToken', refreshToken, {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: isProduction,
       sameSite: 'strict',
+    });
+
+    // Debug logging for OIDC_SAME_SITE troubleshooting (safe: partial token preview only)
+    logger.debug('[setAuthTokens] Setting token_provider cookie', {
+      event: 'setting_refresh_cookie',
+      cookieName: 'token_provider',
+      tokenPreview: previewToken('librechat'),
+      expires: new Date(refreshTokenExpires).toISOString(),
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      token_provider: 'librechat',
     });
     res.cookie('token_provider', 'librechat', {
       expires: new Date(refreshTokenExpires),
@@ -432,11 +462,34 @@ const setOpenIDAuthTokens = (tokenset, res, userId) => {
       logger.error('[setOpenIDAuthTokens] No access or refresh token found in tokenset');
       return;
     }
+
+    // Debug logging for OIDC_SAME_SITE troubleshooting (safe: partial token preview only)
+    logger.debug('[setOpenIDAuthTokens] Setting refresh token cookie', {
+      event: 'setting_refresh_cookie',
+      cookieName: 'refreshToken',
+      tokenPreview: previewToken(tokenset.refresh_token),
+      expires: expirationDate.toISOString(),
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: OIDC_SAME_SITE,
+    });
     res.cookie('refreshToken', tokenset.refresh_token, {
       expires: expirationDate,
       httpOnly: true,
       secure: isProduction,
       sameSite: OIDC_SAME_SITE,
+    });
+
+    // Debug logging for OIDC_SAME_SITE troubleshooting (safe: partial token preview only)
+    logger.debug('[setOpenIDAuthTokens] Setting token_provider cookie', {
+      event: 'setting_refresh_cookie',
+      cookieName: 'token_provider',
+      tokenPreview: previewToken('openid'),
+      expires: expirationDate.toISOString(),
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: OIDC_SAME_SITE,
+      token_provider: 'openid',
     });
     res.cookie('token_provider', 'openid', {
       expires: expirationDate,
@@ -448,6 +501,17 @@ const setOpenIDAuthTokens = (tokenset, res, userId) => {
       /** JWT-signed user ID cookie for image path validation when OPENID_REUSE_TOKENS is enabled */
       const signedUserId = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
         expiresIn: expiryInMilliseconds / 1000,
+      });
+
+      // Debug logging for OIDC_SAME_SITE troubleshooting (safe: partial token preview only)
+      logger.debug('[setOpenIDAuthTokens] Setting openid_user_id cookie', {
+        event: 'setting_refresh_cookie',
+        cookieName: 'openid_user_id',
+        tokenPreview: previewToken(signedUserId),
+        expires: expirationDate.toISOString(),
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: OIDC_SAME_SITE,
       });
       res.cookie('openid_user_id', signedUserId, {
         expires: expirationDate,
