@@ -33,9 +33,21 @@ export class MCPServerInspector {
     connection?: MCPConnection,
   ): Promise<t.ParsedServerConfig> {
     const start = Date.now();
+    logger.debug(`[MCP][${serverName}][Inspector] Starting inspection`, {
+      hasToolFilter: !!rawConfig.toolFilter,
+      toolFilter: rawConfig.toolFilter,
+      startup: rawConfig.startup,
+    });
     const inspector = new MCPServerInspector(serverName, rawConfig, connection);
     await inspector.inspectServer();
     inspector.config.initDuration = Date.now() - start;
+    logger.debug(`[MCP][${serverName}][Inspector] Inspection complete`, {
+      initDuration: inspector.config.initDuration,
+      toolCount: inspector.config.toolFunctions
+        ? Object.keys(inspector.config.toolFunctions).length
+        : 0,
+      hasToolFilter: !!inspector.config.toolFilter,
+    });
     return inspector.config;
   }
 
@@ -88,10 +100,17 @@ export class MCPServerInspector {
   }
 
   private async fetchToolFunctions(): Promise<void> {
+    logger.debug(`[MCP][${this.serverName}][Inspector] Fetching tool functions`, {
+      hasToolFilter: !!this.config.toolFilter,
+      toolFilter: this.config.toolFilter,
+    });
     this.config.toolFunctions = await MCPServerInspector.getToolFunctions(
       this.serverName,
       this.connection!,
       this.config.toolFilter,
+    );
+    logger.debug(
+      `[MCP][${this.serverName}][Inspector] Tool functions fetched: ${Object.keys(this.config.toolFunctions).length} tools`,
     );
   }
 
@@ -107,16 +126,30 @@ export class MCPServerInspector {
     toolFilter: { include?: string[]; exclude?: string[] } | undefined,
     serverName: string,
   ): string[] {
+    const logPrefix = `[MCP][${serverName}][ToolFilter]`;
+
+    logger.debug(`${logPrefix} Starting filter`, {
+      toolCount: toolNames.length,
+      toolNames: toolNames,
+      hasToolFilter: !!toolFilter,
+      toolFilter: toolFilter,
+    });
+
     if (!toolFilter) {
+      logger.debug(
+        `${logPrefix} No toolFilter configured, returning all ${toolNames.length} tools`,
+      );
       return toolNames;
     }
 
     let filteredTools = [...toolNames];
-    const logPrefix = `[MCP][${serverName}][ToolFilter]`;
 
     // Apply include filter first (whitelist)
     if (toolFilter.include && toolFilter.include.length > 0) {
       try {
+        logger.debug(`${logPrefix} Applying include filter`, {
+          patterns: toolFilter.include,
+        });
         const includePatterns = toolFilter.include.map((pattern) => new RegExp(pattern));
         const beforeCount = filteredTools.length;
         filteredTools = filteredTools.filter((toolName) =>
@@ -139,6 +172,9 @@ export class MCPServerInspector {
     // Apply exclude filter (blacklist)
     if (toolFilter.exclude && toolFilter.exclude.length > 0) {
       try {
+        logger.debug(`${logPrefix} Applying exclude filter`, {
+          patterns: toolFilter.exclude,
+        });
         const excludePatterns = toolFilter.exclude.map((pattern) => new RegExp(pattern));
         const beforeCount = filteredTools.length;
         const excluded = filteredTools.filter((toolName) =>
@@ -160,6 +196,12 @@ export class MCPServerInspector {
       }
     }
 
+    logger.debug(`${logPrefix} Filter complete`, {
+      originalCount: toolNames.length,
+      filteredCount: filteredTools.length,
+      filteredTools: filteredTools,
+    });
+
     return filteredTools;
   }
 
@@ -175,16 +217,39 @@ export class MCPServerInspector {
     connection: MCPConnection,
     toolFilter?: { include?: string[]; exclude?: string[] },
   ): Promise<t.LCAvailableTools> {
+    logger.debug(`[MCP][${serverName}][getToolFunctions] Starting`, {
+      hasToolFilter: !!toolFilter,
+      toolFilter: toolFilter,
+    });
+
     const { tools }: t.MCPToolListResponse = await connection.client.listTools();
+    logger.debug(
+      `[MCP][${serverName}][getToolFunctions] Listed ${tools.length} tools from server`,
+      {
+        toolNames: tools.map((t) => t.name),
+      },
+    );
 
     // Filter tools based on toolFilter configuration
     const toolNames = tools.map((tool) => tool.name);
     const filteredToolNames = MCPServerInspector.filterTools(toolNames, toolFilter, serverName);
 
+    logger.debug(
+      `[MCP][${serverName}][getToolFunctions] After filtering: ${filteredToolNames.length} tools`,
+      {
+        filteredToolNames,
+        originalCount: toolNames.length,
+        filteredCount: filteredToolNames.length,
+      },
+    );
+
     const toolFunctions: t.LCAvailableTools = {};
     tools.forEach((tool) => {
       // Only include tools that passed the filter
       if (!filteredToolNames.includes(tool.name)) {
+        logger.debug(
+          `[MCP][${serverName}][getToolFunctions] Skipping filtered-out tool: ${tool.name}`,
+        );
         return;
       }
 
@@ -198,6 +263,13 @@ export class MCPServerInspector {
         },
       };
     });
+
+    logger.debug(
+      `[MCP][${serverName}][getToolFunctions] Created ${Object.keys(toolFunctions).length} tool functions`,
+      {
+        toolFunctionKeys: Object.keys(toolFunctions),
+      },
+    );
 
     return toolFunctions;
   }
