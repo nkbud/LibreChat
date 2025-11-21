@@ -75,19 +75,20 @@ export class MCPTokenStorage {
       // Encrypt and store access token
       const encryptedAccessToken = await encryptV2(tokens.access_token);
 
-      logger.debug(
-        `${logPrefix} Token expires_in: ${'expires_in' in tokens ? tokens.expires_in : 'N/A'}, expires_at: ${'expires_at' in tokens ? tokens.expires_at : 'N/A'}`,
-      );
+      logger.debug(`${logPrefix} Token expiry information`, {
+        expiresIn: 'expires_in' in tokens ? tokens.expires_in : 'N/A',
+        expiresAt: 'expires_at' in tokens ? tokens.expires_at : 'N/A',
+      });
 
       // Handle both expires_in and expires_at formats
       let accessTokenExpiry: Date;
       if ('expires_at' in tokens && tokens.expires_at) {
         /** MCPOAuthTokens format - already has calculated expiry */
-        logger.debug(`${logPrefix} Using expires_at: ${tokens.expires_at}`);
+        logger.debug(`${logPrefix} Using expires_at`, { expiresAt: tokens.expires_at });
         accessTokenExpiry = new Date(tokens.expires_at);
       } else if (tokens.expires_in) {
         /** Standard OAuthTokens format - calculate expiry */
-        logger.debug(`${logPrefix} Using expires_in: ${tokens.expires_in}`);
+        logger.debug(`${logPrefix} Using expires_in`, { expiresIn: tokens.expires_in });
         accessTokenExpiry = new Date(Date.now() + tokens.expires_in * 1000);
       } else {
         /** No expiry provided - default to 1 year */
@@ -95,14 +96,14 @@ export class MCPTokenStorage {
         accessTokenExpiry = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
       }
 
-      logger.debug(`${logPrefix} Calculated expiry date: ${accessTokenExpiry.toISOString()}`);
-      logger.debug(
-        `${logPrefix} Date object: ${JSON.stringify({
-          time: accessTokenExpiry.getTime(),
-          valid: !isNaN(accessTokenExpiry.getTime()),
-          iso: accessTokenExpiry.toISOString(),
-        })}`,
-      );
+      logger.debug(`${logPrefix} Calculated expiry date`, {
+        iso: accessTokenExpiry.toISOString(),
+      });
+      logger.debug(`${logPrefix} Date object details`, {
+        time: accessTokenExpiry.getTime(),
+        valid: !isNaN(accessTokenExpiry.getTime()),
+        iso: accessTokenExpiry.toISOString(),
+      });
 
       // Ensure the date is valid before passing to createToken
       if (isNaN(accessTokenExpiry.getTime())) {
