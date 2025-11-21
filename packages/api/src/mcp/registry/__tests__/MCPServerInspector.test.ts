@@ -845,6 +845,67 @@ describe('MCPServerInspector', () => {
         expect(result['ReadFile_mcp_my_server']).toBeUndefined();
         expect(result['READFILE_mcp_my_server']).toBeUndefined();
       });
+
+      it('should support plain strings (partial match) vs anchored patterns (exact match)', async () => {
+        mockConnection.client.listTools = jest.fn().mockResolvedValue({
+          tools: [
+            {
+              name: 'generate_spl',
+              description: 'Generate SPL',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'my_generate_spl',
+              description: 'My generate SPL',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'generate_spl_query',
+              description: 'Generate SPL query',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'other_tool',
+              description: 'Other tool',
+              inputSchema: { type: 'object', properties: {} },
+            },
+          ],
+        });
+
+        // Test 1: Plain string matches any tool containing the pattern (partial match)
+        const partialMatchFilter = {
+          include: ['generate_spl'], // No anchors - matches any tool containing 'generate_spl'
+        };
+
+        const partialResult = await MCPServerInspector.getToolFunctions(
+          'my_server',
+          mockConnection,
+          partialMatchFilter,
+        );
+
+        // Plain string matches all tools containing 'generate_spl'
+        expect(partialResult['generate_spl_mcp_my_server']).toBeDefined();
+        expect(partialResult['my_generate_spl_mcp_my_server']).toBeDefined();
+        expect(partialResult['generate_spl_query_mcp_my_server']).toBeDefined();
+        expect(partialResult['other_tool_mcp_my_server']).toBeUndefined();
+
+        // Test 2: Anchored pattern matches exact tool name only
+        const exactMatchFilter = {
+          include: ['^generate_spl$'], // With anchors - exact match only
+        };
+
+        const exactResult = await MCPServerInspector.getToolFunctions(
+          'my_server',
+          mockConnection,
+          exactMatchFilter,
+        );
+
+        // Anchored pattern matches only exact 'generate_spl'
+        expect(exactResult['generate_spl_mcp_my_server']).toBeDefined();
+        expect(exactResult['my_generate_spl_mcp_my_server']).toBeUndefined();
+        expect(exactResult['generate_spl_query_mcp_my_server']).toBeUndefined();
+        expect(exactResult['other_tool_mcp_my_server']).toBeUndefined();
+      });
     });
   });
 });

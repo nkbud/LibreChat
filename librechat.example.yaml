@@ -180,26 +180,34 @@ actions:
 #     # IMPORTANT: Filters match against the TOOL NAME ONLY, not the server name
 #     # Tool names are exposed as: toolName_mcp_serverName (e.g., navigate_mcp_puppeteer)
 #     # But filters operate only on the toolName part (e.g., "navigate", not "navigate_mcp_puppeteer")
-#     # Use JavaScript regex patterns to include/exclude tools
+#     # 
+#     # All patterns are treated as JavaScript regex patterns:
+#     # - Plain strings like "generate_spl" do PARTIAL matching (matches "generate_spl", "my_generate_spl", "generate_spl_query")
+#     # - Use anchors for EXACT matching: "^generate_spl$" matches only "generate_spl"
+#     # - Use "^" for prefix: "^generate_" matches "generate_spl", "generate_report"
+#     # - Use "$" for suffix: "_query$" matches "run_query", "execute_query"
 #     toolFilter:
 #       # Include only specific tools (whitelist approach)
 #       # When using include, only tools matching these patterns will be exposed
 #       include:
-#         - "^navigate$"                # Exact match for navigate tool
-#         - "^screenshot$"              # Exact match for screenshot tool
-#         - "^click"                    # All click-related tools (click, clickElement, etc.)
+#         - "^navigate$"                # Exact match for navigate tool only
+#         - "^screenshot$"              # Exact match for screenshot tool only
+#         - "^click"                    # Prefix match: click, clickElement, clickButton, etc.
+#         # Alternative: plain string partial match
+#         # - "navigate"                # Would match: navigate, my_navigate, navigate_to, etc.
 #       # Exclude specific tools (blacklist approach)
 #       # When using exclude, tools matching these patterns will be hidden
 #       # exclude:
-#       #   - ".*delete.*"              # Exclude any tools with 'delete' in the name
-#       #   - ".*dangerous.*"           # Exclude potentially dangerous operations
+#       #   - ".*delete.*"              # Contains match: any tool with 'delete' anywhere in name
+#       #   - ".*dangerous.*"           # Contains match: any tool with 'dangerous' anywhere in name
 #       # 
-#       # Common patterns:
-#       # - Prefix match: "^generate_.*" matches generate_spl, generate_report, etc.
-#       # - Suffix match: ".*_query$" matches run_query, execute_query, etc.
-#       # - Exact match: "^tool_name$" matches only tool_name
-#       # - Contains: ".*search.*" matches any tool with 'search' in the name
-#       # - Multiple: ["^read.*", "^write.*"] matches tools starting with read or write
+#       # Pattern examples:
+#       # - Exact match: "^tool_name$" → matches only "tool_name"
+#       # - Prefix match: "^generate_" → matches "generate_spl", "generate_report", etc.
+#       # - Suffix match: "_query$" → matches "run_query", "execute_query", etc.
+#       # - Contains match: "search" or ".*search.*" → matches any tool with 'search' in name
+#       # - Partial match: "generate_spl" → matches "generate_spl", "my_generate_spl", "generate_spl_query"
+#       # - Multiple patterns: ["^read", "^write"] → matches tools starting with read OR write
 #   filesystem:
 #     # type: stdio
 #     command: npx
