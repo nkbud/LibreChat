@@ -906,6 +906,83 @@ describe('MCPServerInspector', () => {
         expect(exactResult['generate_spl_query_mcp_my_server']).toBeUndefined();
         expect(exactResult['other_tool_mcp_my_server']).toBeUndefined();
       });
+
+      it('should exclude tools from alertbot server (real user scenario)', async () => {
+        // Real scenario from user: alertbot server with 9 tools
+        mockConnection.client.listTools = jest.fn().mockResolvedValue({
+          tools: [
+            {
+              name: 'prometheus_top_n_alerts',
+              description: 'Get top N alerts',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'prometheus_list_entities',
+              description: 'List entities',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'sourcebot_search_code',
+              description: 'Search code',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'sourcebot_get_file_source',
+              description: 'Get file source',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'splunk_get_workload_logs',
+              description: 'Get workload logs',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'kubernetes_get_cluster_events',
+              description: 'Get cluster events',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'kubernetes_get_runbook',
+              description: 'Get runbook',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'kubernetes_get_resource',
+              description: 'Get resource',
+              inputSchema: { type: 'object', properties: {} },
+            },
+            {
+              name: 'alertbot_guides',
+              description: 'Get guides',
+              inputSchema: { type: 'object', properties: {} },
+            },
+          ],
+        });
+
+        // User's config: exclude splunk, sourcebot, and kubernetes tools
+        const toolFilter = {
+          exclude: ['splunk.*', 'sourcebot.*', 'kubernetes.*'],
+        };
+
+        const result = await MCPServerInspector.getToolFunctions(
+          'alertbot',
+          mockConnection,
+          toolFilter,
+        );
+
+        // Only prometheus and alertbot tools should remain
+        expect(result['prometheus_top_n_alerts_mcp_alertbot']).toBeDefined();
+        expect(result['prometheus_list_entities_mcp_alertbot']).toBeDefined();
+        expect(result['alertbot_guides_mcp_alertbot']).toBeDefined();
+
+        // Splunk, sourcebot, and kubernetes tools should be excluded
+        expect(result['sourcebot_search_code_mcp_alertbot']).toBeUndefined();
+        expect(result['sourcebot_get_file_source_mcp_alertbot']).toBeUndefined();
+        expect(result['splunk_get_workload_logs_mcp_alertbot']).toBeUndefined();
+        expect(result['kubernetes_get_cluster_events_mcp_alertbot']).toBeUndefined();
+        expect(result['kubernetes_get_runbook_mcp_alertbot']).toBeUndefined();
+        expect(result['kubernetes_get_resource_mcp_alertbot']).toBeUndefined();
+      });
     });
   });
 });
