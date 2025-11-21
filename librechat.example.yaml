@@ -177,17 +177,37 @@ actions:
 #       - "@modelcontextprotocol/server-puppeteer"
 #     timeout: 300000  # 5 minutes timeout for this server
 #     # Tool filtering - control which tools are exposed from this server
-#     # Use regex patterns to include/exclude tools
+#     # IMPORTANT: Filters match against the TOOL NAME ONLY, not the server name
+#     # Tool names are exposed as: toolName_mcp_serverName (e.g., navigate_mcp_puppeteer)
+#     # But filters operate only on the toolName part (e.g., "navigate", not "navigate_mcp_puppeteer")
+#     # 
+#     # All patterns are treated as JavaScript regex patterns:
+#     # - Plain strings like "generate_spl" do PARTIAL matching (matches "generate_spl", "my_generate_spl", "generate_spl_query")
+#     # - Use anchors for EXACT matching: "^generate_spl$" matches only "generate_spl"
+#     # - Use "^" for prefix: "^generate_" matches "generate_spl", "generate_report"
+#     # - Use "$" for suffix: "_query$" matches "run_query", "execute_query"
 #     toolFilter:
 #       # Include only specific tools (whitelist approach)
+#       # When using include, only tools matching these patterns will be exposed
 #       include:
-#         - "^puppeteer_navigate$"      # Exact match for navigate tool
-#         - "^puppeteer_screenshot$"    # Exact match for screenshot tool
-#         - "^puppeteer_click"          # All click-related tools
+#         - "^navigate$"                # Exact match for navigate tool only
+#         - "^screenshot$"              # Exact match for screenshot tool only
+#         - "^click"                    # Prefix match: click, clickElement, clickButton, etc.
+#         # Alternative: plain string partial match
+#         # - "navigate"                # Would match: navigate, my_navigate, navigate_to, etc.
 #       # Exclude specific tools (blacklist approach)
+#       # When using exclude, tools matching these patterns will be hidden
 #       # exclude:
-#       #   - ".*delete.*"              # Exclude any tools with 'delete' in the name
-#       #   - ".*dangerous.*"           # Exclude potentially dangerous operations
+#       #   - ".*delete.*"              # Contains match: any tool with 'delete' anywhere in name
+#       #   - ".*dangerous.*"           # Contains match: any tool with 'dangerous' anywhere in name
+#       # 
+#       # Pattern examples:
+#       # - Exact match: "^tool_name$" → matches only "tool_name"
+#       # - Prefix match: "^generate_" → matches "generate_spl", "generate_report", etc.
+#       # - Suffix match: "_query$" → matches "run_query", "execute_query", etc.
+#       # - Contains match: "search" or ".*search.*" → matches any tool with 'search' in name
+#       # - Partial match: "generate_spl" → matches "generate_spl", "my_generate_spl", "generate_spl_query"
+#       # - Multiple patterns: ["^read", "^write"] → matches tools starting with read OR write
 #   filesystem:
 #     # type: stdio
 #     command: npx
@@ -197,6 +217,7 @@ actions:
 #       - /home/user/LibreChat/
 #     iconPath: /home/user/LibreChat/client/public/assets/logo.svg
 #     # Example: Allow read operations but block write/delete operations
+#     # Remember: filters match the tool name only, not including the server suffix
 #     toolFilter:
 #       exclude:
 #         - ".*write.*"                 # Block write operations
@@ -209,13 +230,40 @@ actions:
 #       - "mcp-obsidian"
 #       - /path/to/obsidian/vault
 #     # Example: Combine include and exclude filters
-#     # Include filter is applied first, then exclude
+#     # Include filter is applied first (whitelist), then exclude (blacklist)
+#     # This allows you to select a broad category and then remove specific tools
 #     toolFilter:
 #       include:
 #         - "^search.*"                 # Only allow search-related tools
 #         - "^read.*"                   # And read-related tools
 #       exclude:
 #         - ".*admin.*"                 # But exclude any admin operations
+# 
+# # Advanced toolFilter examples:
+# #
+# # Example 1: Include specific Splunk operations
+# # splunk-server:
+# #   toolFilter:
+# #     include:
+# #       - "^generate_spl$"           # Exact match
+# #       - "^optimize_spl$"           # Exact match
+# #       - "^explain_spl$"            # Exact match
+# #       - "^run_splunk_query$"       # Exact match
+# #
+# # Example 2: Exclude all tools from certain namespaces
+# # multi-tool-server:
+# #   toolFilter:
+# #     exclude:
+# #       - "^splunk.*"                # All Splunk tools
+# #       - "^kubernetes.*"            # All Kubernetes tools
+# #       - "^sourcebot.*"             # All Sourcebot tools
+# #
+# # Example 3: Allow all query tools across namespaces
+# # query-server:
+# #   toolFilter:
+# #     include:
+# #       - ".*_query$"                # Any tool ending with _query
+# #       - ".*_search$"               # Any tool ending with _search
 
 
 # Definition of custom endpoints
