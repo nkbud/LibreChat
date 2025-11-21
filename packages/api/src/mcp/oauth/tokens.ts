@@ -60,8 +60,17 @@ export class MCPTokenStorage {
   }: StoreTokensParams): Promise<void> {
     const logPrefix = this.getLogPrefix(userId, serverName);
 
+    logger.debug(`${logPrefix} Starting token storage`, {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      hasClientInfo: !!clientInfo,
+      hasMetadata: !!metadata,
+      existingTokensProvided: !!existingTokens,
+    });
+
     try {
       const identifier = `mcp:${serverName}`;
+      logger.debug(`${logPrefix} Using identifier: ${identifier}`);
 
       // Encrypt and store access token
       const encryptedAccessToken = await encryptV2(tokens.access_token);
@@ -217,14 +226,20 @@ export class MCPTokenStorage {
         }
       }
 
-      logger.debug(`${logPrefix} Stored OAuth tokens`, {
-        client_id: clientInfo?.client_id,
-        has_refresh_token: !!tokens.refresh_token,
-        expires_at: 'expires_at' in tokens ? tokens.expires_at : 'N/A',
+      logger.debug(`${logPrefix} Stored OAuth tokens successfully`, {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        hasClientInfo: !!clientInfo,
+        clientId: clientInfo?.client_id,
+        expiresAt: 'expires_at' in tokens ? tokens.expires_at : 'N/A',
+        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       const logPrefix = this.getLogPrefix(userId, serverName);
-      logger.error(`${logPrefix} Failed to store tokens`, error);
+      logger.error(`${logPrefix} Failed to store tokens`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       throw error;
     }
   }
@@ -242,8 +257,15 @@ export class MCPTokenStorage {
   }: GetTokensParams): Promise<MCPOAuthTokens | null> {
     const logPrefix = this.getLogPrefix(userId, serverName);
 
+    logger.debug(`${logPrefix} Retrieving OAuth tokens from storage`, {
+      hasRefreshTokensFunction: !!refreshTokens,
+      hasCreateToken: !!createToken,
+      hasUpdateToken: !!updateToken,
+    });
+
     try {
       const identifier = `mcp:${serverName}`;
+      logger.debug(`${logPrefix} Looking up access token with identifier: ${identifier}`);
 
       // Get access token
       const accessTokenData = await findToken({
@@ -252,12 +274,26 @@ export class MCPTokenStorage {
         identifier,
       });
 
+      logger.debug(`${logPrefix} Access token lookup result`, {
+        found: !!accessTokenData,
+        expiresAt: accessTokenData?.expiresAt?.toISOString(),
+        createdAt: accessTokenData?.createdAt?.toISOString(),
+      });
+
       /** Check if access token is missing or expired */
       const isMissing = !accessTokenData;
       const isExpired = accessTokenData?.expiresAt && new Date() >= accessTokenData.expiresAt;
 
+      logger.debug(`${logPrefix} Access token status`, {
+        isMissing,
+        isExpired,
+        needsRefresh: isMissing || isExpired,
+      });
+
       if (isMissing || isExpired) {
-        logger.info(`${logPrefix} Access token ${isMissing ? 'missing' : 'expired'}`);
+        logger.info(
+          `${logPrefix} Access token ${isMissing ? 'missing' : 'expired'}, attempting refresh`,
+        );
 
         /** Refresh data if we have a refresh token and refresh function */
         const refreshTokenData = await findToken({
@@ -266,35 +302,42 @@ export class MCPTokenStorage {
           identifier: `${identifier}:refresh`,
         });
 
+        logger.debug(`${logPrefix} Refresh token lookup result`, {
+          found: !!refreshTokenData,
+          expiresAt: refreshTokenData?.expiresAt?.toISOString(),
+        });
+
         if (!refreshTokenData) {
-          logger.info(
-            `${logPrefix} Access token ${isMissing ? 'missing' : 'expired'} and no refresh token available`,
-          );
+          logger.info(`${logPrefix} No refresh token available - re-authentication required`, {
+            reason: isMissing ? 'access_token_missing' : 'access_token_expired',
+          });
           return null;
         }
 
         if (!refreshTokens) {
-          logger.warn(
-            `${logPrefix} Access token ${isMissing ? 'missing' : 'expired'}, refresh token available but no \`refreshTokens\` provided`,
-          );
+          logger.warn(`${logPrefix} Refresh token available but no refresh function provided`, {
+            reason: isMissing ? 'access_token_missing' : 'access_token_expired',
+          });
           return null;
         }
 
         if (!createToken) {
-          logger.warn(
-            `${logPrefix} Access token ${isMissing ? 'missing' : 'expired'}, refresh token available but no \`createToken\` function provided`,
-          );
+          logger.warn(`${logPrefix} Refresh token available but no createToken function provided`, {
+            reason: isMissing ? 'access_token_missing' : 'access_token_expired',
+          });
           return null;
         }
 
         try {
-          logger.info(`${logPrefix} Attempting to refresh token`);
+          logger.info(`${logPrefix} Starting token refresh using refresh token`);
           const decryptedRefreshToken = await decryptV2(refreshTokenData.token);
+          logger.debug(`${logPrefix} Refresh token decrypted successfully`);
 
           /** Client information if available */
           let clientInfo;
           let clientInfoData;
           try {
+            logger.debug(`${logPrefix} Looking up client information`);
             clientInfoData = await findToken({
               userId,
               type: 'mcp_oauth_client',
@@ -303,13 +346,17 @@ export class MCPTokenStorage {
             if (clientInfoData) {
               const decryptedClientInfo = await decryptV2(clientInfoData.token);
               clientInfo = JSON.parse(decryptedClientInfo);
-              logger.debug(`${logPrefix} Retrieved client info:`, {
-                client_id: clientInfo.client_id,
-                has_client_secret: !!clientInfo.client_secret,
+              logger.debug(`${logPrefix} Client info retrieved`, {
+                clientId: clientInfo.client_id,
+                hasClientSecret: !!clientInfo.client_secret,
               });
+            } else {
+              logger.debug(`${logPrefix} No client info found in storage`);
             }
-          } catch {
-            logger.debug(`${logPrefix} No client info found`);
+          } catch (err) {
+            logger.debug(`${logPrefix} Error retrieving client info`, {
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
 
           const metadata = {
@@ -319,10 +366,16 @@ export class MCPTokenStorage {
             clientInfo,
           };
 
+          logger.debug(`${logPrefix} Calling refresh function`);
           const newTokens = await refreshTokens(decryptedRefreshToken, metadata);
+          logger.debug(`${logPrefix} Refresh function returned new tokens`, {
+            hasAccessToken: !!newTokens.access_token,
+            hasRefreshToken: !!newTokens.refresh_token,
+          });
 
           // Store the refreshed tokens (handles both create and update)
           // Pass existing token state to avoid duplicate DB calls
+          logger.debug(`${logPrefix} Storing refreshed tokens`);
           await this.storeTokens({
             userId,
             serverName,
@@ -338,17 +391,18 @@ export class MCPTokenStorage {
             },
           });
 
-          logger.info(`${logPrefix} Successfully refreshed and stored OAuth tokens`);
+          logger.info(`${logPrefix} Token refresh completed successfully`);
           return newTokens;
         } catch (refreshError) {
-          logger.error(`${logPrefix} Failed to refresh tokens`, refreshError);
+          logger.error(`${logPrefix} Token refresh failed`, {
+            error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+            stack: refreshError instanceof Error ? refreshError.stack : undefined,
+          });
           // Check if it's an unauthorized_client error (refresh not supported)
           const errorMessage =
             refreshError instanceof Error ? refreshError.message : String(refreshError);
           if (errorMessage.includes('unauthorized_client')) {
-            logger.info(
-              `${logPrefix} Server does not support refresh tokens for this client. New authentication required.`,
-            );
+            logger.info(`${logPrefix} Server does not support refresh tokens - re-auth required`);
           }
           return null;
         }

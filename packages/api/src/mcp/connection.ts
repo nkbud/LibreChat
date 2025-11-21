@@ -249,7 +249,23 @@ export class MCPConnection extends EventEmitter {
           const headers = { ...options.headers };
           if (this.oauthTokens?.access_token) {
             headers['Authorization'] = `Bearer ${this.oauthTokens.access_token}`;
+            logger.debug(
+              `${this.getLogPrefix()} Added OAuth Authorization header to SSE transport`,
+              {
+                hasAccessToken: true,
+                tokenType: this.oauthTokens.token_type || 'Bearer',
+              },
+            );
+          } else {
+            logger.debug(`${this.getLogPrefix()} No OAuth token available for SSE transport`, {
+              hasOAuthTokens: !!this.oauthTokens,
+            });
           }
+
+          logger.debug(`${this.getLogPrefix()} SSE transport headers`, {
+            headerKeys: Object.keys(headers),
+            hasAuthHeader: !!headers['Authorization'],
+          });
 
           const timeoutValue = this.timeout || DEFAULT_TIMEOUT;
           const transport = new SSEClientTransport(url, {
@@ -305,7 +321,26 @@ export class MCPConnection extends EventEmitter {
           const headers = { ...options.headers };
           if (this.oauthTokens?.access_token) {
             headers['Authorization'] = `Bearer ${this.oauthTokens.access_token}`;
+            logger.debug(
+              `${this.getLogPrefix()} Added OAuth Authorization header to streamable-http transport`,
+              {
+                hasAccessToken: true,
+                tokenType: this.oauthTokens.token_type || 'Bearer',
+              },
+            );
+          } else {
+            logger.debug(
+              `${this.getLogPrefix()} No OAuth token available for streamable-http transport`,
+              {
+                hasOAuthTokens: !!this.oauthTokens,
+              },
+            );
           }
+
+          logger.debug(`${this.getLogPrefix()} Streamable-http transport headers`, {
+            headerKeys: Object.keys(headers),
+            hasAuthHeader: !!headers['Authorization'],
+          });
 
           const transport = new StreamableHTTPClientTransport(url, {
             requestInit: {
@@ -430,40 +465,51 @@ export class MCPConnection extends EventEmitter {
 
   async connectClient(): Promise<void> {
     if (this.connectionState === 'connected') {
+      logger.debug(`${this.getLogPrefix()} Already connected, skipping connection`);
       return;
     }
 
     if (this.connectPromise) {
+      logger.debug(`${this.getLogPrefix()} Connection in progress, waiting for existing promise`);
       return this.connectPromise;
     }
 
     if (this.shouldStopReconnecting) {
+      logger.debug(`${this.getLogPrefix()} Reconnection stopped, skipping connection`);
       return;
     }
 
+    logger.debug(`${this.getLogPrefix()} Starting connection process`);
     this.emit('connectionChange', 'connecting');
 
     this.connectPromise = (async () => {
       try {
         if (this.transport) {
           try {
+            logger.debug(`${this.getLogPrefix()} Closing existing transport before reconnecting`);
             await this.client.close();
             this.transport = null;
           } catch (error) {
-            logger.warn(`${this.getLogPrefix()} Error closing connection:`, error);
+            logger.warn(`${this.getLogPrefix()} Error closing connection`, {
+              error: error instanceof Error ? error.message : String(error),
+            });
           }
         }
 
+        logger.debug(`${this.getLogPrefix()} Constructing new transport`);
         this.transport = this.constructTransport(this.options);
         this.setupTransportDebugHandlers();
 
         const connectTimeout = this.options.initTimeout ?? 120000;
+        logger.debug(`${this.getLogPrefix()} Connecting client with timeout: ${connectTimeout}ms`);
+
         await withTimeout(
           this.client.connect(this.transport),
           connectTimeout,
           `Connection timeout after ${connectTimeout}ms`,
         );
 
+        logger.info(`${this.getLogPrefix()} Connection established successfully`);
         this.connectionState = 'connected';
         this.emit('connectionChange', 'connected');
         this.reconnectAttempts = 0;
