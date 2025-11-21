@@ -97,9 +97,6 @@ export class MCPTokenStorage {
       }
 
       logger.debug(`${logPrefix} Calculated expiry date`, {
-        iso: accessTokenExpiry.toISOString(),
-      });
-      logger.debug(`${logPrefix} Date object details`, {
         time: accessTokenExpiry.getTime(),
         valid: !isNaN(accessTokenExpiry.getTime()),
         iso: accessTokenExpiry.toISOString(),
